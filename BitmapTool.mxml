@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx" width="680" height="450">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.graphics.codec.JPEGEncoder;
+			import mx.graphics.codec.PNGEncoder;
+			
+			private var _total : int;
+			private var _curr : int;
+			private var _files : Array;
+			private var _loader : Loader;
+			private var _type : int;
+			private var _fileName : String;
+			private var _cut : Boolean;
+			private var _put : Boolean;
+			private var _width : int;
+			private var _height : int;
+			private var _path : String;
+			
+			private const RegExp_JPG : RegExp = /jpg/i;
+			private const RegExp_PNG : RegExp = /png/i;
+			
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var file : File = new File();
+				file.browseForDirectory("选择导入文件夹路径");
+				file.addEventListener(Event.SELECT, onSelectFiles);
+				file.addEventListener(Event.CANCEL, onCancelFiles);
+			}
+			
+			private function onSelectFiles(event : Event):void
+			{
+				var file : File = event.currentTarget as File;
+				file.removeEventListener(Event.SELECT, onSelectFiles);
+				file.removeEventListener(Event.CANCEL, onCancelFiles);
+				
+				txtPath0.text = file.nativePath;
+			}
+			
+			private function onCancelFiles(event : Event):void
+			{
+				var file : File = event.currentTarget as File;
+				file.removeEventListener(Event.SELECT, onSelectFiles);
+				file.removeEventListener(Event.CANCEL, onCancelFiles);
+			}
+			
+			protected function button2_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+				var file : File = new File();
+				file.browseForDirectory("选择导入文件夹路径");
+				file.addEventListener(Event.SELECT, onSelectFiles1);
+				file.addEventListener(Event.CANCEL, onCancelFiles1);
+			}
+			
+			private function onSelectFiles1(event : Event):void
+			{
+				var file : File = event.currentTarget as File;
+				file.removeEventListener(Event.SELECT, onSelectFiles1);
+				file.removeEventListener(Event.CANCEL, onCancelFiles1);
+				
+				txtPath1.text = file.nativePath;
+			}
+			
+			private function onCancelFiles1(event : Event):void
+			{
+				var file : File = event.currentTarget as File;
+				file.removeEventListener(Event.SELECT, onSelectFiles1);
+				file.removeEventListener(Event.CANCEL, onCancelFiles1);
+			}
+			
+			protected function button3_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var path1 : String = txtPath0.text;
+				var path2 : String = txtPath1.text;
+				if(path1.length > 0 && path2.length > 0)
+				{
+					try
+					{
+						var file1 : File = new File(path1);
+						var file2 : File = new File(path2);
+						_path = path2;
+						if(file1.nativePath == file2.nativePath)
+						{
+							Alert.show("导入导出的文件夹不能相同");
+						}
+						else
+						{
+							_files = file1.getDirectoryListing();
+							_total = _files.length;
+							_curr = 0;
+							proBar.maximum = _total;
+							_cut = checkCut.selected;
+							_put = checkBoxPut.selected;
+							_width = int(txtWidth.text);
+							_height = int(txtHeight.text);
+							start();
+						}
+					}
+					catch(e : Error)
+					{
+						Alert.show("文件夹路径报错：" + e.message);
+						
+					}
+				}
+				else
+				{
+					Alert.show("先选择导入导出路径");
+				}
+			}
+			
+			private function start():void
+			{
+				if(_curr < _total)
+				{
+					var file : File = _files[_curr++];
+					var fileName : String = file.name;
+					var nameArr : Array = fileName.split(".");
+					if(nameArr.length == 2)
+					{
+						var extName : String = nameArr[1];
+						_fileName = nameArr[0];
+						if(extName.search(RegExp_JPG) == 0)
+						{
+							extName = "jpg";
+							_type = 0;
+						}
+						else if(extName.search(RegExp_PNG) == 0)
+						{
+							extName = "png";
+							_type = 1;
+						}
+						else
+						{
+							start();
+							return;
+						}
+						var fileStream : FileStream = new FileStream();
+						fileStream.open(file, FileMode.READ);
+						var ba : ByteArray = new ByteArray();
+						fileStream.readBytes(ba);
+						fileStream.close();
+						_loader = new Loader();
+						var loaderContext : LoaderContext = new LoaderContext();
+						loaderContext.allowCodeImport = true;
+						_loader.contentLoaderInfo.addEventListener(Event.COMPLETE, onLoadComplete);
+						_loader.contentLoaderInfo.addEventListener(IOErrorEvent.IO_ERROR, onLoadError);
+						_loader.loadBytes(ba);
+						proBar.setProgress( _curr,_total);
+					}
+					else
+					{
+						start();
+					}
+				}
+				else
+				{
+					Alert.show("完成");
+				}
+			}
+			
+			private function onLoadComplete(event : Event):void
+			{
+				var loaderInfo : LoaderInfo = event.currentTarget as LoaderInfo;
+				loaderInfo.removeEventListener(Event.COMPLETE, onLoadComplete);
+				loaderInfo.removeEventListener(IOErrorEvent.IO_ERROR, onLoadError);
+				var bitmap : Bitmap = loaderInfo.content as Bitmap;
+				var bitmapData : BitmapData = bitmap.bitmapData;
+				if(_cut)
+				{
+					var rect : Rectangle = bitmapData.getColorBoundsRect(0xFA000000,0x00000000,false);
+					var bmd : BitmapData = new BitmapData(rect.width,rect.height);
+					bmd.draw(bitmapData,new Matrix(1,0,0,1,-rect.x,-rect.y));
+					if(_type == 0)
+					{
+						var jpg : JPEGEncoder = new JPEGEncoder();
+						var ba : ByteArray = jpg.encode(bmd);
+						var path : String = _path + "/" + _fileName + ".jpg";
+						var file : File = new File(path);
+						var fileStream : FileStream = new FileStream();
+						fileStream.open(file, FileMode.WRITE);
+						fileStream.writeBytes(ba);
+						fileStream.close();
+					}
+					else if(_type == 1)
+					{
+						var png : PNGEncoder = new PNGEncoder();
+						ba = png.encode(bmd);
+						
+						path = _path + "/" + _fileName + ".png";
+						file = new File(path);
+						fileStream = new FileStream();
+						fileStream.open(file, FileMode.WRITE);
+						fileStream.writeBytes(ba);
+						fileStream.close();
+					}
+				}
+				start();
+			}
+			
+			private function onLoadError(event : Event):void
+			{
+				var loaderInfo : LoaderInfo = event.currentTarget as LoaderInfo;
+				loaderInfo.removeEventListener(Event.COMPLETE, onLoadComplete);
+				loaderInfo.removeEventListener(IOErrorEvent.IO_ERROR, onLoadError);
+				
+				start();
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<s:Panel left="0" right="0" top="0" bottom="0" title="批量处理图片工具">
+		<s:Label x="64" y="36" text="导入文件夹："/>
+		<s:TextInput id="txtPath0" x="141" y="30" width="379"/>
+		<s:Button x="528" y="31" label="更改" click="button1_clickHandler(event)"/>
+		<s:Label x="64" y="70" text="导出文件夹："/>
+		<s:TextInput id="txtPath1" x="141" y="64" width="379"/>
+		<s:Button x="528" y="65" label="更改" click="button2_clickHandler(event)"/>
+		<s:CheckBox id="cboxChangeName" x="102" y="119" width="91" label="更换后缀名"/>
+		<s:RadioButton id="rbtn_PNG" x="302" y="119" label=".png" enabled="false" selected="true" groupName="ext"/>
+		<s:RadioButton id="rbtn_JPG" x="377" y="119" width="46" label=".jpg" enabled="false" groupName="ext"/>
+		<s:CheckBox id="checkCut" x="102" y="156" width="139" label="切图（切除空白区）"/>
+		<mx:ProgressBar id="proBar" x="65" y="315" width="534"/>
+		<s:Button x="308" y="361" height="20" label="开始导出" click="button3_clickHandler(event)"/>
+		<s:CheckBox id="checkBoxPut" x="102" y="190" width="123" label="放在更大的背景上"/>
+		<s:TextInput id="txtWidth" x="295" y="190" width="83" restrict="0-9"/>
+		<s:TextInput id="txtHeight" x="442" y="190" width="83" restrict="0-9"/>
+		<s:Label x="274" y="197" text="宽 :"/>
+		<s:Label x="418" y="196" text="高:"/>
+	</s:Panel>
+</s:WindowedApplication>
